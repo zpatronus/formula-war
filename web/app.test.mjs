@@ -9,7 +9,7 @@ test('practice stays local and the home logo leaves practice and multiplayer',as
   if(key==='stroke')return ()=>{if([.04,.09,.18].includes(target.globalAlpha))historyStrokes.push(target.globalAlpha);};
   return target[key]??(()=>{});
  }});
- const element=id=>{if(!elements.has(id))elements.set(id,{id,value:'',hidden:false,disabled:false,textContent:'',innerHTML:'',clientWidth:800,clientHeight:100,scrollHeight:100,scrollTop:0,classList:{toggle(){}},getContext:()=>ctx,attributes:{},setAttribute(key,value){this.attributes[key]=value;},setSelectionRange(start,end){this.selectionStart=start;this.selectionEnd=end;},focus(){},blur(){},showModal(){},close(){}});return elements.get(id);};
+ const element=id=>{if(!elements.has(id))elements.set(id,{id,value:'',hidden:false,disabled:false,textContent:'',innerHTML:'',clientWidth:800,clientHeight:100,scrollHeight:100,scrollTop:0,classList:{values:new Set(),toggle(name,force){const enabled=force??!this.values.has(name);if(enabled)this.values.add(name);else this.values.delete(name);return enabled;},contains(name){return this.values.has(name);}},getContext:()=>ctx,attributes:{},setAttribute(key,value){this.attributes[key]=value;},setSelectionRange(start,end){this.selectionStart=start;this.selectionEnd=end;},focus(){},blur(){},showModal(){},close(){}});return elements.get(id);};
  globalThis.document={getElementById:element};
  globalThis.localStorage={getItem:()=>null,setItem(){}};
  const saved=new Map();globalThis.sessionStorage={getItem:key=>saved.get(key)||null,setItem:(key,value)=>saved.set(key,value),removeItem:key=>saved.delete(key)};
@@ -59,21 +59,34 @@ test('practice stays local and the home logo leaves practice and multiplayer',as
  assert.equal(frames.size,0);
  await new Promise(resolve=>setImmediate(resolve));
  const liveRoom={id:'12345678',name:'Friends',host:'p1',created:new Date().toISOString(),players:[{id:'p1',name:'You',team:'watch'}],roster:[],history:[],seed:'',phase:'lobby',shot:0,turn:''};
- let source,leaveBody,finishLeave;
+ let source,leaveBody,finishLeave,teamRequest;
  globalThis.EventSource=class{constructor(){source=this;}close(){this.closed=true;}};
  globalThis.fetch=async(path,options)=>{
+  if(path.endsWith('/team')){teamRequest=JSON.parse(options.body);liveRoom.players.find(p=>p.id==='p1').team=teamRequest.team;return {ok:true,json:async()=>liveRoom};}
   if(path.endsWith('/leave')){leaveBody=JSON.parse(options.body);return new Promise(resolve=>{finishLeave=()=>resolve({ok:true,json:async()=>liveRoom});});}
   return {ok:true,json:async()=>options?.method==='POST'?{room:liveRoom,token:'secret',player:'p1'}:[]};
  };
  element('name').value='You';element('room-name').value='Friends';
  await element('entry-form').onsubmit({preventDefault(){},submitter:{disabled:false}});
  assert.ok(saved.has('fw-session'));assert.equal(element('room-view').hidden,false);
+ const selectTeam=team=>element('teams').onclick({target:{closest:()=>({dataset:{team},disabled:false})}});
+ assert.equal(element('room-view').classList.contains('in-match'),false);
+ await selectTeam('blue');assert.equal(teamRequest.team,'blue');assert.equal(teamRequest.token,'secret');
+ assert.match(element('teams').innerHTML,/data-team="blue"[^>]*>Selected/);
+ 
  liveRoom.phase='playing';liveRoom.turn='blue';liveRoom.seed='coordinates';
  liveRoom.players=[{id:'p1',name:'You',team:'red'},{id:'p2',name:'Opponent',team:'blue'}];liveRoom.roster=liveRoom.players;
  source.onmessage({data:JSON.stringify(liveRoom)});
  assert.equal(element('arena-note').textContent,'Opponent is aiming','opponent coordinates should not be shown');
+ assert.equal(element('room-view').classList.contains('in-match'),true);
+ teamRequest=null;await selectTeam('red');assert.equal(teamRequest,null,'team changes must remain blocked during a game');
+ 
  liveRoom.turn='red';source.onmessage({data:JSON.stringify(liveRoom)});
  assert.match(element('arena-note').textContent,/You is aiming · \(-[0-9]/);
+ liveRoom.phase='finished';source.onmessage({data:JSON.stringify(liveRoom)});
+ assert.equal(element('room-view').classList.contains('in-match'),false,'finished games must restore visible team controls');
+ await selectTeam('blue');assert.equal(teamRequest.team,'blue');assert.match(element('teams').innerHTML,/data-team="blue"[^>]*>Selected/);
+ 
  
  element('home-link').onclick({preventDefault(){}});
  assert.equal(element('home').hidden,false);assert.equal(element('room-view').hidden,true);
