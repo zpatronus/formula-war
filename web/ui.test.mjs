@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {editEquation} from './ui.mjs';
+import {editEquation,trajectoryHistory} from './ui.mjs';
 import {parse,evaluate} from './game.mjs';
 
 test('keypad can compose expressions with functions, implicit multiplication and cursor movement',()=>{
@@ -35,4 +35,21 @@ test('page offers every supported key and places history after keyboard, before 
  assert.ok(html.indexOf('id="feed"')<html.indexOf('id="multiplayer-rules"'));
  assert.match(html,/<details class="panel instructions">/);
  const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(match=>match[1]);assert.equal(new Set(ids).size,ids.length);
+});
+
+test('each player sees their own last three trajectories plus only the latest other shot',()=>{
+ const paths=['me','opponent-a','me','teammate','me','opponent-b','me','opponent-a'].map((player,shot)=>({player,shot}));
+ const before=JSON.stringify(paths),history=trajectoryHistory(paths,'me');
+ assert.deepEqual(history.map(h=>h.path.shot),[2,4,6,7]);
+ assert.deepEqual(history.map(h=>h.opacity),[.04,.09,.18,.18]);
+ assert.deepEqual(trajectoryHistory(paths,'opponent-a').map(h=>h.path.shot),[1,6,7]);
+ assert.deepEqual(trajectoryHistory(paths,'spectator').map(h=>h.path.shot),[7]);
+ assert.deepEqual(trajectoryHistory(paths.slice(0,4),'me').map(h=>h.path.shot),[0,2,3],'teammates count as other players');
+ assert.deepEqual(trajectoryHistory([], 'me'),[]);assert.equal(JSON.stringify(paths),before);
+});
+test('trajectory history respects current animation, hides future shots, and keeps active shot separate',()=>{
+ const paths=['me','other','me','other','me','other','me','other','me'].map((player,shot)=>({player,shot}));
+ assert.deepEqual(trajectoryHistory(paths,'me',6).map(h=>h.path.shot),[0,2,4,5]);
+ assert.deepEqual(trajectoryHistory(paths,'me',7).map(h=>h.path.shot),[2,4,6]);
+ assert.deepEqual(trajectoryHistory(paths,'me').map(h=>h.path.shot),[4,6,7,8]);
 });

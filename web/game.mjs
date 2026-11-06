@@ -130,7 +130,7 @@ export function trace(ast,shooter,units,obstacles,budget=RANGE){
  }
  return {points,length,reason,hits:[...hits],impacts,obstacle};
 }
-export function reconstruct(room){const state=board(room);state.paths=[];let shot=0;for(const e of room.history||[]){if(e.kind!=='fire')continue;const shooter=state.units.find(u=>u.id===e.player&&u.alive)||shooterFor(state.units,shot%2===0?(room.firstTurn||'red'):(room.firstTurn==='blue'?'red':'blue'),shot);if(shooter){try{const path=trace(parse(e.text),shooter,state.units,state.obstacles);state.paths.push({...path,team:shooter.team,shot,distances:measurePath(path.points)});}catch{}}for(const id of e.data?.hits||[]){const u=state.units.find(u=>u.id===id);if(u)u.alive=false;}if(e.data?.obstacle)state.obstacles=state.obstacles.filter(o=>o.id!==e.data.obstacle);shot++;}return state;}
+export function reconstruct(room){const state=board(room);state.paths=[];let shot=0;for(const e of room.history||[]){if(e.kind!=='fire')continue;const shooter=state.units.find(u=>u.id===e.player&&u.alive)||shooterFor(state.units,shot%2===0?(room.firstTurn||'red'):(room.firstTurn==='blue'?'red':'blue'),shot);if(shooter){try{const path=trace(parse(e.text),shooter,state.units,state.obstacles);state.paths.push({...path,team:shooter.team,player:shooter.id,shot,distances:measurePath(path.points)});}catch{}}for(const id of e.data?.hits||[]){const u=state.units.find(u=>u.id===id);if(u)u.alive=false;}if(e.data?.obstacle)state.obstacles=state.obstacles.filter(o=>o.id!==e.data.obstacle);shot++;}return state;}
 
 // Cumulative Euclidean distances allow animation independent of x or sample density.
 export function measurePath(points) {

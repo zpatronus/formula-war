@@ -30,3 +30,15 @@ export function editEquation(value,start,end,key,maxLength=160){
  if(edited.length>maxLength)throw Error(`Use at most ${maxLength} characters.`);
  return {value:edited,start:caret,end:caret};
 }
+
+// History is local to the observer: three of their own shots, one from anyone else.
+export function trajectoryHistory(paths,playerId,activeShot=null){
+ const visible=paths.filter(path=>activeShot===null||path.shot<=activeShot);
+ const own=visible.filter(path=>path.player===playerId&&path.shot!==activeShot).slice(-3);
+ const opacity=[.04,.09,.18];
+ const history=own.map((path,i)=>({path,opacity:opacity[opacity.length-own.length+i]}));
+ const other=visible.findLast(path=>path.player!==playerId);
+ // An opponent's active shot replaces their previous history line immediately.
+ if(other&&other.shot!==activeShot)history.push({path:other,opacity:.18});
+ return history.sort((a,b)=>a.path.shot-b.path.shot);
+}
