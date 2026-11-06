@@ -9,7 +9,7 @@ test('practice stays local and the home logo leaves practice and multiplayer',as
   if(key==='stroke')return ()=>{if([.04,.09,.18].includes(target.globalAlpha))historyStrokes.push(target.globalAlpha);};
   return target[key]??(()=>{});
  }});
- const element=id=>{if(!elements.has(id))elements.set(id,{id,value:'',hidden:false,disabled:false,textContent:'',innerHTML:'',clientWidth:800,clientHeight:100,scrollHeight:100,scrollTop:0,classList:{toggle(){}},getContext:()=>ctx,focus(){},showModal(){},close(){}});return elements.get(id);};
+ const element=id=>{if(!elements.has(id))elements.set(id,{id,value:'',hidden:false,disabled:false,textContent:'',innerHTML:'',clientWidth:800,clientHeight:100,scrollHeight:100,scrollTop:0,classList:{toggle(){}},getContext:()=>ctx,attributes:{},setAttribute(key,value){this.attributes[key]=value;},setSelectionRange(start,end){this.selectionStart=start;this.selectionEnd=end;},focus(){},blur(){},showModal(){},close(){}});return elements.get(id);};
  globalThis.document={getElementById:element};
  globalThis.localStorage={getItem:()=>null,setItem(){}};
  const saved=new Map();globalThis.sessionStorage={getItem:key=>saved.get(key)||null,setItem:(key,value)=>saved.set(key,value),removeItem:key=>saved.delete(key)};
@@ -31,8 +31,15 @@ test('practice stays local and the home logo leaves practice and multiplayer',as
  await element('fire-form').onsubmit({preventDefault(){}});
  assert.equal(element('phase-label').textContent,'Practice · shot 1');assert.equal(element('fire').disabled,false);
  assert.match(element('toast').textContent,/No turn was used/);assert.equal(frames.size,0);
+ 
+ function keypress(key){element('equation-keys').onclick({target:{closest:()=>({dataset:{key}})}});}
+ keypress('clear');keypress('3');keypress('sin');keypress('5');keypress('x');keypress('right');
+ assert.equal(element('equation').value,'3sin(5x)');assert.equal(element('equation').selectionStart,element('equation').value.length);
+ element('native-keyboard').onclick();assert.equal(element('equation').inputMode,'none');
+ element('native-keyboard').onclick();assert.equal(element('equation').inputMode,'text');
+ assert.equal(element('history-heading').textContent,'Shot history');
  element('equation').value='0';
- async function fire(){await element('fire-form').onsubmit({preventDefault(){}});assert.equal(element('fire').disabled,true);const callbacks=[...frames.values()];frames.clear();for(const cb of callbacks)cb(0);const finish=[...frames.values()];frames.clear();for(const cb of finish)cb(5000);assert.equal(element('fire').disabled,false);assert.equal(frames.size,0,'completed history should stay visible without a fading timer');}
+ async function fire(){await element('fire-form').onsubmit({preventDefault(){}});assert.equal(element('fire').disabled,true);assert.equal(element('equation-keys').disabled,true);keypress('clear');assert.equal(element('equation').value,'0','keypad must not edit during a shot');const callbacks=[...frames.values()];frames.clear();for(const cb of callbacks)cb(0);const finish=[...frames.values()];frames.clear();for(const cb of finish)cb(5000);assert.equal(element('fire').disabled,false);assert.equal(frames.size,0,'completed history should stay visible without a fading timer');}
  await fire();assert.equal(element('phase-label').textContent,'Practice · shot 2');
  await fire();assert.equal(element('phase-label').textContent,'Practice · shot 3');
  assert.deepEqual(historyStrokes,[.09,.18]);

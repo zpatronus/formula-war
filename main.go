@@ -24,6 +24,7 @@ var assets embed.FS
 const idleTTL = 10 * time.Minute
 const roomTTL = 2 * time.Hour
 const maxRooms = 100
+const obstacleCount = 15
 
 type Player struct {
 	ID   string `json:"id"`
@@ -281,12 +282,38 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, q *http.Request) {
 		}
 		// Physics is deliberately client-owned. Only accept bounded result identifiers.
 		var result struct {
-			Hits   []string `json:"hits"`
-			Winner string   `json:"winner"`
+			Hits     []string `json:"hits"`
+			Winner   string   `json:"winner"`
+			Obstacle string   `json:"obstacle,omitempty"`
 		}
 		if json.Unmarshal(in.Data, &result) != nil || len(result.Hits) > 8 || (result.Winner != "" && result.Winner != "red" && result.Winner != "blue" && result.Winner != "draw") {
 			fail(w, 400, "Invalid shot result")
 			return
+		}
+		if result.Obstacle != "" {
+			valid := false
+			for i := 0; i < obstacleCount; i++ {
+				if result.Obstacle == fmt.Sprintf("obstacle-%d", i) {
+					valid = true
+					break
+				}
+			}
+			if !valid {
+				fail(w, 400, "Invalid obstacle identifier")
+				return
+			}
+			for _, event := range r.History {
+				if event.Kind == "fire" {
+					var previous struct {
+						Obstacle string `json:"obstacle"`
+					}
+					json.Unmarshal(event.Data, &previous)
+					if previous.Obstacle == result.Obstacle {
+						fail(w, 400, "Obstacle already destroyed")
+						return
+					}
+				}
+			}
 		}
 		for _, target := range result.Hits {
 			if target == pid || !alive[target] {
@@ -373,6 +400,26 @@ func (s *Server) joinRoom(w http.ResponseWriter, r *Room, name string) {
 	if name == "" || len(name) > 24 {
 		fail(w, 400, "Choose a name (1–24 characters)")
 		return
+	}
+	// Usernames identify players in this account-free game, across browsers.
+	// Resume before checking capacity: rejoining does not add a room member.
+	for _, player := range r.Players {
+		if strings.EqualFold(player.Name, name) {
+			token := ""
+			for candidate, playerID := range r.tokens {
+				if playerID == player.ID {
+					token = candidate
+					break
+				}
+			}
+			if token == "" {
+				token = id()
+				r.tokens[token] = player.ID
+			}
+			r.Active = s.now()
+			respond(w, 200, map[string]any{"token": token, "player": player.ID, "room": r})
+			return
+		}
 	}
 	if len(r.Players) >= 24 {
 		fail(w, 409, "Room is full")

@@ -1,4 +1,5 @@
 export const RANGE = 600;
+export const OBSTACLE_COUNT = 15;
 const functions = new Set(['sin','cos','tan','exp','ln','sqrt','abs']);
 export function parse(source) {
  if(source.length>160) throw Error('Use at most 160 characters.');
@@ -56,8 +57,22 @@ export function interval(n,lo,hi){
 export function board(room){
  let seed=2166136261;for(const c of room.seed||'preview'){seed=Math.imul(seed^c.charCodeAt(0),16777619)>>>0;}
  const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
- const units=[];for(const team of ['red','blue']){const ps=(room.roster?.length?room.roster:room.players).filter(p=>p.team===team);ps.forEach((p,i)=>units.push({...p,x:(team==='red'?-1:1)*(14+random()*3),y:ps.length===1?(random()-.5)*10:-8+i*16/(ps.length-1)+(random()-.5),alive:true}));}
- const obstacles=Array.from({length:5},(_,i)=>({x:-7+i*3.5+(random()-.5),y:(random()-.5)*15,r:.8+random()*.9}));return {units,obstacles};
+ const units=[];for(const team of ['red','blue']){const ps=(room.roster?.length?room.roster:room.players).filter(p=>p.team===team);ps.forEach((p,i)=>units.push({...p,x:(team==='red'?-1:1)*(13+random()*5),y:ps.length===1?(random()-.5)*20:-10+(i+.2+.6*random())*20/ps.length,alive:true}));}
+ const obstacles=[];
+ for(let i=0;i<OBSTACLE_COUNT;i++){
+  const radius=1.1+random()*.9;
+  let best=null,clearance=-Infinity;
+  // Random candidates in continuous space, without rows or columns. Pick a
+  // well-spaced candidate using only the seeded PRNG, so replay stays identical.
+  for(let attempt=0;attempt<48;attempt++){
+   const candidate={id:`obstacle-${i}`,x:(random()-.5)*17.6,y:(random()-.5)*19,r:radius};
+   const gap=Math.min(Infinity,...obstacles.map(o=>Math.hypot(o.x-candidate.x,o.y-candidate.y)-o.r));
+   if(gap>clearance){best=candidate;clearance=gap;}
+  }
+  best.r=Math.min(radius,clearance-.35);
+  obstacles.push(best);
+ }
+ return {units,obstacles,allObstacles:obstacles};
 }
 export function shooterFor(units,team,shot){const alive=units.filter(u=>u.team===team&&u.alive);return alive[Math.floor(shot/2)%alive.length];}
 function distance(p,a,b){const dx=b.x-a.x,dy=b.y-a.y,t=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/(dx*dx+dy*dy||1)));return Math.hypot(p.x-a.x-t*dx,p.y-a.y-t*dy);}
@@ -79,7 +94,7 @@ export function equationForView(source,team,view){
 export function trace(ast,shooter,units,obstacles,budget=RANGE){
  ast=worldEquation(ast,shooter.team);
  const origin=evaluate(ast,shooter.x);if(!Number.isFinite(origin)||!interval(ast,shooter.x,shooter.x).every(Number.isFinite))throw Error(`Equation is undefined at your starting x = ${viewX(shooter.x,shooter.team).toFixed(2)}. Shift it or choose a different equation.`);
- const direction=shooter.team==='red'?1:-1,points=[{x:shooter.x,y:shooter.y}],hits=new Set(),impacts=[];let x=0,length=0,reason='precision limit',iterations=0;
+ const direction=shooter.team==='red'?1:-1,points=[{x:shooter.x,y:shooter.y}],hits=new Set(),impacts=[];let x=0,length=0,reason='precision limit',iterations=0,obstacle=null;
  while(iterations++<24000){
   let step=.04,accepted=false,next;
   for(let k=0;k<18;k++){
@@ -102,7 +117,7 @@ export function trace(ast,shooter,units,obstacles,budget=RANGE){
   if(boundary){next={x:last.x+(next.x-last.x)*t,y:last.y+(next.y-last.y)*t};segment*=t;}
   let collision=null;
   // Segments are at most 0.1 units; collision radii are larger than sample spacing.
-  for(const o of obstacles){if(distance(o,last,next)<=o.r){collision='obstacle';break;}}
+  for(const o of obstacles){if(distance(o,last,next)<=o.r){collision='obstacle';obstacle=o.id||null;break;}}
   if(!collision)for(const u of units){
    if(u.alive&&u.team!==shooter.team&&!hits.has(u.id)&&distance(u,last,next)<=.55){
     hits.add(u.id);impacts.push({id:u.id,length:length+segment});
@@ -113,9 +128,9 @@ export function trace(ast,shooter,units,obstacles,budget=RANGE){
   if(boundary){reason='edge of arena';break;}
   if(length>=budget-1e-9){reason='range limit';break;}
  }
- return {points,length,reason,hits:[...hits],impacts};
+ return {points,length,reason,hits:[...hits],impacts,obstacle};
 }
-export function reconstruct(room){const state=board(room);state.paths=[];let shot=0;for(const e of room.history||[]){if(e.kind!=='fire')continue;const shooter=state.units.find(u=>u.id===e.player&&u.alive)||shooterFor(state.units,shot%2===0?(room.firstTurn||'red'):(room.firstTurn==='blue'?'red':'blue'),shot);if(shooter){try{const path=trace(parse(e.text),shooter,state.units,state.obstacles);state.paths.push({...path,team:shooter.team,shot,distances:measurePath(path.points)});}catch{}}for(const id of e.data?.hits||[]){const u=state.units.find(u=>u.id===id);if(u)u.alive=false;}shot++;}return state;}
+export function reconstruct(room){const state=board(room);state.paths=[];let shot=0;for(const e of room.history||[]){if(e.kind!=='fire')continue;const shooter=state.units.find(u=>u.id===e.player&&u.alive)||shooterFor(state.units,shot%2===0?(room.firstTurn||'red'):(room.firstTurn==='blue'?'red':'blue'),shot);if(shooter){try{const path=trace(parse(e.text),shooter,state.units,state.obstacles);state.paths.push({...path,team:shooter.team,shot,distances:measurePath(path.points)});}catch{}}for(const id of e.data?.hits||[]){const u=state.units.find(u=>u.id===id);if(u)u.alive=false;}if(e.data?.obstacle)state.obstacles=state.obstacles.filter(o=>o.id!==e.data.obstacle);shot++;}return state;}
 
 // Cumulative Euclidean distances allow animation independent of x or sample density.
 export function measurePath(points) {

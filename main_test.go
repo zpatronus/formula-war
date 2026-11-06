@@ -254,7 +254,7 @@ func TestCreateOrJoin(t *testing.T) {
 		t.Fatal("room code did not join", status)
 	}
 	for len(s.rooms[rid].Players) < 24 {
-		call(t, s, "POST", "/api/rooms", map[string]string{"name": "friends", "player": "Guest"})
+		call(t, s, "POST", "/api/rooms", map[string]string{"name": "friends", "player": "Guest " + strconv.Itoa(len(s.rooms[rid].Players))})
 	}
 	status, _ = call(t, s, "POST", "/api/rooms", map[string]string{"name": "friends", "player": "Extra"})
 	if status != 409 || len(s.rooms) != maxRooms {
@@ -344,5 +344,80 @@ func TestRandomStartingSideAndRematch(t *testing.T) {
 		if status != 200 || r.Turn == r.FirstTurn {
 			t.Fatal("first team could not fire or turn did not alternate")
 		}
+	}
+}
+
+func TestUsernameResumeAndUniqueness(t *testing.T) {
+	s := newServer()
+	rid, token, pid := create(t, s)
+	r := s.rooms[rid]
+	r.Players[0].Team = "red"
+	r.Phase = "playing"
+	r.Turn = "red"
+	r.Seed = id()
+	r.Roster = append([]Player{}, r.Players...)
+	r.History = append(r.History, Event{Kind: "chat", Player: pid, Text: "still here"})
+	for _, name := range []string{"Ada", "ada", " ADA "} {
+		status, joined := call(t, s, "POST", "/api/rooms/"+rid+"/join", map[string]string{"name": name})
+		if status != 200 || joined["player"] != pid || joined["token"] != token || len(r.Players) != 1 || r.Players[0].Team != "red" || len(r.History) != 1 {
+			t.Fatal("username did not resume existing player", name, status)
+		}
+	}
+	for len(r.Players) < 24 {
+		s.joinRoom(httptest.NewRecorder(), r, "Guest "+strconv.Itoa(len(r.Players)))
+	}
+	status, joined := call(t, s, "POST", "/api/rooms", map[string]string{"name": r.Name, "player": "aDa"})
+	if status != 200 || joined["player"] != pid || len(r.Players) != 24 {
+		t.Fatal("resume at capacity failed")
+	}
+	status, _ = call(t, s, "POST", "/api/rooms/"+rid+"/join", map[string]string{"name": "New player"})
+	if status != 409 {
+		t.Fatal("new player bypassed room capacity")
+	}
+}
+
+func TestObstacleHistoryIsRecordedAndValidatedWithoutPhysics(t *testing.T) {
+	s := newServer()
+	rid, token, _ := create(t, s)
+	r := s.rooms[rid]
+	r.Players[0].Team = "red"
+	r.Players = append(r.Players, Player{ID: "b", Name: "Blue", Team: "blue"})
+	r.Roster = append([]Player{}, r.Players...)
+	r.Phase = "playing"
+	r.Turn = "red"
+	r.Seed = id()
+	r.tokens["blue-token"] = "b"
+	fire := func(token, obstacle string, shot int) int {
+		status, _ := call(t, s, "POST", "/api/rooms/"+rid+"/fire", map[string]any{"token": token, "seed": r.Seed, "shot": shot, "text": "0", "data": map[string]any{"hits": []string{}, "obstacle": obstacle}})
+		return status
+	}
+	for _, invalid := range []string{"obstacle-15", "obstacle--1", "<script>", "obstacle-01"} {
+		if fire(token, invalid, 0) != 400 {
+			t.Fatal("invalid obstacle accepted", invalid)
+		}
+	}
+	if fire(token, "obstacle-0", 0) != 200 {
+		t.Fatal("obstacle result not recorded")
+	}
+	var result struct {
+		Obstacle string `json:"obstacle"`
+	}
+	json.Unmarshal(r.History[0].Data, &result)
+	if result.Obstacle != "obstacle-0" {
+		t.Fatal("lost destruction record")
+	}
+	if fire("blue-token", "obstacle-0", 1) != 400 {
+		t.Fatal("duplicate destruction accepted")
+	}
+	if fire("blue-token", "obstacle-14", 1) != 200 {
+		t.Fatal("second destruction rejected")
+	}
+	status, joined := call(t, s, "POST", "/api/rooms/"+rid+"/join", map[string]string{"name": "Ada"})
+	if status != 200 {
+		t.Fatal("rejoin")
+	}
+	history := joined["room"].(map[string]any)["history"].([]any)
+	if len(history) != 2 {
+		t.Fatal("rejoin missing obstacle history")
 	}
 }

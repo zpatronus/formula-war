@@ -204,3 +204,34 @@ test('huge exponential transitions exceed resolution, reciprocal sigmoid transit
   assert.ok(sigmoid.points.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)));
  }
 });
+
+test('denser seeded middle and wider player zones stay inside the arena and separate',()=>{
+ let minY=Infinity,maxY=-Infinity,minX=Infinity,maxX=-Infinity;
+ for(let seed=0;seed<100;seed++){
+  const room={seed:`layout-${seed}`,players:[{id:'r',team:'red'},{id:'b',team:'blue'}]};
+  const state=board(room);assert.deepEqual(board(room),state);assert.ok(state.obstacles.some(o=>Math.abs(o.y)>1.2&&Math.abs(o.y-7)>1.2&&Math.abs(o.y+7)>1.2),'obstacles should not be confined to the old three rows');assert.equal(state.obstacles.length,15);assert.equal(new Set(state.obstacles.map(o=>o.id)).size,15);
+  for(const u of state.units){assert.ok(Math.abs(u.x)>=13&&Math.abs(u.x)<=18);assert.ok(Math.abs(u.y)<=10);minY=Math.min(minY,u.y);maxY=Math.max(maxY,u.y);minX=Math.min(minX,Math.abs(u.x));maxX=Math.max(maxX,Math.abs(u.x));}
+  for(let i=0;i<state.obstacles.length;i++)for(let j=i+1;j<state.obstacles.length;j++){const a=state.obstacles[i],b=state.obstacles[j];assert.ok(Math.hypot(a.x-b.x,a.y-b.y)>=a.r+b.r+.35-1e-10);}
+  for(const o of state.obstacles){assert.ok(o.r>=1.1&&o.r<=2);assert.ok(Math.abs(o.x)+o.r<12);assert.ok(Math.abs(o.y)+o.r<12);for(const u of state.units)assert.ok(Math.hypot(u.x-o.x,u.y-o.y)>o.r+.55);}
+ }
+ assert.ok(minY<-9&&maxY>9);assert.ok(minX<13.5&&maxX>17.5);
+ const team=board({seed:'four',players:Array.from({length:4},(_,i)=>({id:`r${i}`,team:'red'}))}).units;
+ for(let i=0;i<team.length;i++)for(let j=i+1;j<team.length;j++)assert.ok(Math.hypot(team[i].x-team[j].x,team[i].y-team[j].y)>1.1);
+});
+
+test('client replay restores destroyed obstacles and recalculates later shots through the gap',()=>{
+ const room={seed:'destruction',players:[{id:'r',name:'Red',team:'red'},{id:'b',name:'Blue',team:'blue'}],firstTurn:'red',history:[]};room.roster=room.players;
+ const initial=board(room),unit=initial.units[0],target=initial.obstacles[5];
+ const formula=`${(target.y-unit.y)/(target.x-unit.x)}x`;
+ const first=trace(parse(formula),unit,initial.units,initial.obstacles);
+ assert.equal(first.reason,'obstacle');assert.ok(first.obstacle);
+ room.history.push({kind:'fire',player:unit.id,text:formula,data:{hits:first.hits,obstacle:first.obstacle}});
+ const after=reconstruct(room);assert.equal(after.obstacles.length,14);assert.ok(!after.obstacles.some(o=>o.id===first.obstacle));
+ assert.deepEqual(after.paths[0].points,first.points);
+ const second=trace(parse(formula),unit,after.units,after.obstacles);
+ assert.ok(second.length>first.length);assert.notEqual(second.obstacle,first.obstacle);
+ room.history.push({kind:'fire',player:unit.id,text:formula,data:{hits:second.hits,obstacle:second.obstacle}});
+ const rejoined=reconstruct(JSON.parse(JSON.stringify(room)));
+ assert.deepEqual(rejoined,reconstruct(room));assert.deepEqual(rejoined.paths[1].points,second.points);
+ assert.equal(initial.obstacles.length,15,'replay must not mutate original arena');
+});
