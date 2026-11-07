@@ -421,3 +421,53 @@ func TestObstacleHistoryIsRecordedAndValidatedWithoutPhysics(t *testing.T) {
 		t.Fatal("rejoin missing obstacle history")
 	}
 }
+
+func TestFrontendAssetVersioning(t *testing.T) {
+	handler := secure(frontendHandler())
+	get := func(path string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+		return w
+	}
+	page := get("/")
+	if page.Code != 200 || page.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("HTML must always refresh")
+	}
+	find := func(marker string) string {
+		_, after, ok := strings.Cut(page.Body.String(), marker)
+		if !ok {
+			t.Fatal("missing asset", marker)
+		}
+		path, _, _ := strings.Cut(after, `"`)
+		return path
+	}
+	stylesheet, app := find(`href="/assets/`), find(`src="/assets/`)
+	stylesheet = "/assets/" + stylesheet
+	app = "/assets/" + app
+	prefix := strings.TrimSuffix(app, "app.mjs")
+	if stylesheet != prefix+"style.css" {
+		t.Fatal("page assets do not share a build version")
+	}
+	for _, name := range []string{"style.css", "app.mjs", "game.mjs", "ui.mjs"} {
+		response := get(prefix + name)
+		original, _ := assets.ReadFile("web/" + name)
+		if response.Code != 200 || !bytes.Equal(response.Body.Bytes(), original) {
+			t.Fatal("wrong versioned asset", name)
+		}
+		if response.Header().Get("Cache-Control") != "public, max-age=31536000, immutable" {
+			t.Fatal("versioned asset should cache safely", name)
+		}
+		if get("/"+name).Header().Get("Cache-Control") != "no-store" {
+			t.Fatal("legacy URLs must not create stale cache entries", name)
+		}
+	}
+	if !strings.Contains(get(stylesheet).Body.String(), `data-theme="dark"`) {
+		t.Fatal("versioned CSS is missing the dark theme")
+	}
+	if get("/assets/stale/style.css").Code != 404 {
+		t.Fatal("old build URL must not return another build's contents")
+	}
+	if get("/main.go").Code != 404 {
+		t.Fatal("source file exposed")
+	}
+}

@@ -2,12 +2,12 @@ package main
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"embed"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/fs"
 	"log"
 	"mime"
 	"net/http"
@@ -544,6 +544,65 @@ func (s *Server) events(w http.ResponseWriter, q *http.Request, rid string) {
 		}
 	}
 }
+
+// Fingerprint the complete embedded frontend. Relative module imports stay in
+// the same versioned directory, so a CDN cannot mix files from different builds.
+func frontendHandler() http.Handler {
+	files := map[string][]byte{}
+	hash := sha256.New()
+	for _, name := range []string{"index.html", "style.css", "app.mjs", "game.mjs", "ui.mjs"} {
+		data, err := assets.ReadFile("web/" + name)
+		if err != nil {
+			panic(err)
+		}
+		files[name] = data
+		hash.Write([]byte(name + "\x00"))
+		hash.Write(data)
+	}
+	prefix := "/assets/" + hex.EncodeToString(hash.Sum(nil))[:16] + "/"
+	page := []byte(strings.NewReplacer(
+		`href="/style.css"`, `href="`+prefix+`style.css"`,
+		`src="/app.mjs"`, `src="`+prefix+`app.mjs"`,
+	).Replace(string(files["index.html"])))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" && r.Method != "HEAD" {
+			w.Header().Set("Allow", "GET, HEAD")
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		name := strings.TrimPrefix(r.URL.Path, "/")
+		versioned := strings.HasPrefix(r.URL.Path, prefix)
+		if versioned {
+			name = strings.TrimPrefix(r.URL.Path, prefix)
+		}
+		if name == "" {
+			name = "index.html"
+		}
+		data, ok := files[name]
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		switch name {
+		case "index.html":
+			data = page
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		case "style.css":
+			w.Header().Set("Content-Type", "text/css; charset=utf-8")
+		default:
+			w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+		}
+		if versioned && name != "index.html" {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		}
+		w.Header().Set("Content-Length", fmt.Sprint(len(data)))
+		if r.Method != "HEAD" {
+			w.Write(data)
+		}
+	})
+}
+
 func main() {
 	s := newServer()
 	go func() {
@@ -557,8 +616,7 @@ func main() {
 	}()
 	mux := http.NewServeMux()
 	mux.Handle("/api/", s)
-	web, _ := fs.Sub(assets, "web")
-	mux.Handle("/", http.FileServer(http.FS(web)))
+	mux.Handle("/", frontendHandler())
 	addr := os.Getenv("ADDR")
 	if addr == "" {
 		addr = ":8080"

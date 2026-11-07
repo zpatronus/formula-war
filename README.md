@@ -32,6 +32,10 @@ Choose **Practice solo** for a browser-only training arena with three target dum
 - Shots penetrate players and can eliminate multiple enemies in one turn. Teammates are unharmed. Each enemy is shown eliminated when the animated bullet reaches it. Eliminate the opposing team to win. Matches draw after 100 shots. The host can start a fresh match with a new arena. A team player's explicit departure ends the current match.
 - Closing a tab preserves membership for reconnects. Use Leave or click the Formula War logo to return home and remove yourself; if the host leaves, the oldest remaining member becomes host. Disconnected players retain their turns; a stalled room expires naturally.
 
+## Deployment assets
+
+The Go server serves HTML with `Cache-Control: no-store` and places frontend assets under a content-hashed `/assets/<version>/` directory. CSS and JavaScript imports share that version, so Cloudflare or browser caches cannot mix stale styles with a new application. Versioned assets can be cached indefinitely; a frontend change automatically generates a new URL on the next deployment.
+
 ## Appearance
 
 The page and canvas follow your system light/dark setting by default, including live changes. Use the header’s System / Light / Dark selector to override it. Your preference is saved locally in the browser.
