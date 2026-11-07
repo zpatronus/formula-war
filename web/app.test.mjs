@@ -84,7 +84,7 @@ test('practice stays local and the home logo leaves practice and multiplayer',as
  const own=board(liveRoom).units.find(u=>u.id==='p1');
  assert.equal(element('constant-bar').hidden,false);
  assert.equal(element('equation-constant').textContent,formatConstant(own.y+own.x**2),'constant must use your unit even when opponent is aiming');
- element('equation').value='sin(';element('equation').oninput();assert.equal(element('equation-constant').textContent,'—');
+ element('equation').value='sin(';element('equation').oninput();assert.equal(element('equation-constant').textContent,'');assert.equal(element('constant-bar').hidden,true);
  element('equation').value='0';element('equation').oninput();
  
  assert.equal(element('room-view').classList.contains('in-match'),true);

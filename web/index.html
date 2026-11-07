@@ -13,8 +13,7 @@
   <div class="game-main">
    <div class="arena-heading"><span id="phase-label"></span><span id="turn-label"></span></div>
    <div class="canvas-wrap"><canvas id="arena" aria-label="Game arena with player positions, obstacles, and equation paths"></canvas><div id="arena-note"></div></div>
-   <form id="fire-form" class="equation-bar"><label for="equation">f(x) =</label><input id="equation" value="sin(x)" maxlength="160" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="text" aria-label="Shot equation"></form>
-   <div id="constant-bar" class="constant-bar" hidden><span>Auto constant</span><output id="equation-constant" for="equation" aria-live="polite" aria-atomic="true">—</output><span id="constant-note">Added to anchor the curve at your unit</span></div>
+   <form id="fire-form" class="equation-bar"><label for="equation">f(x) =</label><input id="equation" value="sin(x)" maxlength="160" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="text" aria-label="Shot equation"><div id="constant-bar" class="constant-bar" hidden><output id="equation-constant" for="equation" aria-label="Automatically added constant" aria-live="polite" aria-atomic="true"></output></div></form>
    <div class="shot-meta"><span id="shot-info">600 units of curve per shot</span><span id="coordinate-info">Arena coordinates · your team fires left to right</span></div>
    <section class="panel equation-keyboard" aria-labelledby="keyboard-title">
     <div class="section-heading"><h3 id="keyboard-title">Equation keyboard</h3><button class="primary" id="fire" type="submit" form="fire-form">Fire ↗</button></div>
