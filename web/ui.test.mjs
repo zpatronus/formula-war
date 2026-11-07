@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {editEquation,trajectoryHistory} from './ui.mjs';
+import {editEquation,trajectoryHistory,formatConstant} from './ui.mjs';
 import {parse,evaluate} from './game.mjs';
 
 test('keypad can compose expressions with functions, implicit multiplication and cursor movement',()=>{
@@ -52,4 +52,11 @@ test('trajectory history respects current animation, hides future shots, and kee
  assert.deepEqual(trajectoryHistory(paths,'me',6).map(h=>h.path.shot),[0,2,4,5]);
  assert.deepEqual(trajectoryHistory(paths,'me',7).map(h=>h.path.shot),[2,4,6]);
  assert.deepEqual(trajectoryHistory(paths,'me').map(h=>h.path.shot),[4,6,7,8]);
+});
+
+test('automatic constant uses signed scientific notation without changing its numeric value',()=>{
+ assert.equal(formatConstant(103),'+1.03e2');assert.equal(formatConstant(-103),'-1.03e2');
+ assert.equal(formatConstant(.005),'+5.00e-3');assert.equal(formatConstant(0),'+0.00e0');
+ assert.equal(formatConstant(-0),'+0.00e0');assert.equal(formatConstant(1e100),'+1.00e100');
+ assert.throws(()=>formatConstant(Infinity));assert.throws(()=>formatConstant(NaN));
 });

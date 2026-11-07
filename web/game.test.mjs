@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {parse,evaluate,interval,trace,board,reconstruct,worldEquation,viewX,viewerTeam,equationForView} from './game.mjs';
+import {parse,evaluate,interval,trace,board,reconstruct,worldEquation,viewX,viewerTeam,equationForView,anchorEquation} from './game.mjs';
 const calc=s=>evaluate(parse(s),2);
 const shooter={id:'a',team:'red',x:-19,y:0,alive:true};
 const shoot=(s,budget=60)=>trace(parse(s),shooter,[shooter],[],budget);
@@ -234,4 +234,14 @@ test('client replay restores destroyed obstacles and recalculates later shots th
  const rejoined=reconstruct(JSON.parse(JSON.stringify(room)));
  assert.deepEqual(rejoined,reconstruct(room));assert.deepEqual(rejoined.paths[1].points,second.points);
  assert.equal(initial.obstacles.length,15,'replay must not mutate original arena');
+});
+
+test('displayed constant shares the shot anchor and respects blue coordinates',()=>{
+ for(const team of ['red','blue']){
+  const unit={...shooter,team,x:team==='red'?-10:10,y:3};
+  assert.equal(anchorEquation(parse('-x^2'),unit).constant,103);
+  assert.equal(anchorEquation(parse('3x'),unit).constant,33);
+  assert.equal(anchorEquation(parse('3x+7'),unit).constant,26);
+  assert.throws(()=>anchorEquation(parse('ln(x)'),unit));
+ }
 });

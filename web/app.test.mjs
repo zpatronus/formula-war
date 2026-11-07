@@ -1,5 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {board} from './game.mjs';
+import {formatConstant} from './ui.mjs';
 
 test('practice stays local and the home logo leaves practice and multiplayer',async()=>{
  const elements=new Map(),frames=new Map();let frameID=0,requests=0;
@@ -68,7 +70,7 @@ test('practice stays local and the home logo leaves practice and multiplayer',as
  };
  element('name').value='You';element('room-name').value='Friends';
  await element('entry-form').onsubmit({preventDefault(){},submitter:{disabled:false}});
- assert.ok(saved.has('fw-session'));assert.equal(element('room-view').hidden,false);
+ assert.ok(saved.has('fw-session'));assert.equal(element('room-view').hidden,false);assert.equal(element('constant-bar').hidden,true,'spectators do not see another player constant');
  const selectTeam=team=>element('teams').onclick({target:{closest:()=>({dataset:{team},disabled:false})}});
  assert.equal(element('room-view').classList.contains('in-match'),false);
  await selectTeam('blue');assert.equal(teamRequest.team,'blue');assert.equal(teamRequest.token,'secret');
@@ -78,6 +80,13 @@ test('practice stays local and the home logo leaves practice and multiplayer',as
  liveRoom.players=[{id:'p1',name:'You',team:'red'},{id:'p2',name:'Opponent',team:'blue'}];liveRoom.roster=liveRoom.players;
  source.onmessage({data:JSON.stringify(liveRoom)});
  assert.equal(element('arena-note').textContent,'Opponent is aiming','opponent coordinates should not be shown');
+ element('equation').value='-x^2';element('equation').oninput();
+ const own=board(liveRoom).units.find(u=>u.id==='p1');
+ assert.equal(element('constant-bar').hidden,false);
+ assert.equal(element('equation-constant').textContent,formatConstant(own.y+own.x**2),'constant must use your unit even when opponent is aiming');
+ element('equation').value='sin(';element('equation').oninput();assert.equal(element('equation-constant').textContent,'—');
+ element('equation').value='0';element('equation').oninput();
+ 
  assert.equal(element('room-view').classList.contains('in-match'),true);
  teamRequest=null;await selectTeam('red');assert.equal(teamRequest,null,'team changes must remain blocked during a game');
  

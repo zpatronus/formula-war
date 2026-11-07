@@ -1,5 +1,5 @@
-import {parse,trace,reconstruct,shooterFor,RANGE,pathAtLength,viewX,viewerTeam,equationForView} from './game.mjs';
-import {escapeHTML as esc,editEquation,trajectoryHistory} from './ui.mjs';
+import {parse,trace,reconstruct,shooterFor,RANGE,pathAtLength,viewX,viewerTeam,equationForView,anchorEquation} from './game.mjs';
+import {escapeHTML as esc,editEquation,trajectoryHistory,formatConstant} from './ui.mjs';
 const $=id=>document.getElementById(id);
 let session=null,room=null,stream=null,state=null,pendingRoom=null,connected=false,busy=false,toastTimer,stateKey,animationFrame=null,practice=false,practiceTeam='red';
 const SHOT_SPEED=48; // World units of arc length per second.
@@ -60,11 +60,24 @@ function apply(data){$('room-view').classList.toggle('practice',practice);$('roo
  $('teams').innerHTML=['red','blue','watch'].map(team=>{const members=room.players.filter(p=>p.team===team);return `<div class="team"><div class="team-heading ${team}"><span>${team==='watch'?'Spectators':team==='red'?'● Red team':'● Blue team'} <span class="muted">${members.length}${team==='watch'?'':' / 4'}</span></span><button type="button" data-team="${team}" ${room.phase==='playing'?'disabled':''}>${members.some(p=>p.id===session.player)?'Selected':team==='watch'?'Watch':'Join'}</button></div><div class="team-members">${members.length?members.map(p=>`<div class="player-name"><span>${esc(p.name)}${p.id===session.player?' (you)':''}</span><span>${p.id===room.host?'host':state.units.find(u=>u.id===p.id)?.alive===false?'out':''}</span></div>`).join(''):'Waiting for players…'}</div></div>`;}).join('');
  $('start').hidden=practice||room.host!==session.player;$('start').textContent=room.phase==='finished'?'Play again ↗':'Start match ↗';$('host-note').textContent=room.host===session.player?'Start when both teams have at least one player. Starting team is chosen randomly.':'The host starts the match when everyone is ready.';
  const feed=$('feed'),wasBottom=feed.scrollHeight-feed.scrollTop-feed.clientHeight<40;feed.innerHTML=room.history.length?room.history.map(e=>{const name=room.players.find(p=>p.id===e.player)?.name||'Former player';return e.kind==='chat'?`<p><strong>${esc(name)}</strong><br>${esc(e.text)}</p>`:`<p class="muted">↗ ${esc(name)} fired <code>${esc(equationForView(e.text,(room.roster||room.players).find(p=>p.id===e.player)?.team||'red',viewerTeam(room,session.player)))}</code>${e.data?.hits?.length?` · ${e.data.hits.length} hit${e.data.hits.length===1?'':'s'}!`:''}</p>`;}).join(''):(practice?'<p class="muted">Your shots will appear here.</p>':'<p class="muted">Invite your friends. Pick a side. Make a little mathematical mayhem.</p>');if(wasBottom)feed.scrollTop=feed.scrollHeight;if(practice){$('room-code').textContent='LOCAL PRACTICE / NO ROOM SLOT USED';$('phase-label').textContent=room.phase==='finished'?'Practice complete':`Practice · shot ${room.shot+1}`;$('turn-label').textContent=room.phase==='finished'?'New targets to try again':`${practiceTeam} side · your turn`;}$('coordinate-info').textContent=room.players.find(p=>p.id===session.player)?.team==='watch'?'Arena coordinates · red left / blue right':'Arena coordinates · your team fires left to right';$('practice-side').textContent=practiceTeam==='red'?'Try blue side ⇄':'Try red side ⇄';updateControls();draw();}
-function updateControls(){if(!room)return;const current=shooterFor(state.units,room.turn,room.shot),canFire=connected&&!busy&&!animations.length&&room.phase==='playing'&&current?.id===session.player;$('fire').disabled=!canFire;$('start').disabled=!!animations.length||room.phase==='playing'||!['red','blue'].every(t=>room.players.some(p=>p.team===t));$('equation').disabled=!!animations.length||room.phase!=='playing';$('equation-keys').disabled=$('equation').disabled;$('native-keyboard').disabled=$('equation').disabled;}
+function updateConstant(){
+ const unit=state?.units.find(u=>u.id===session?.player),output=$('equation-constant');
+ $('constant-bar').hidden=!unit||room?.phase==='lobby';
+ output.textContent='—';output.title='';
+ if(!unit||room?.phase==='lobby')return;
+ try{
+  const {constant}=anchorEquation(parse($('equation').value),unit);
+  output.textContent=formatConstant(constant);output.title=String(constant);
+  $('constant-note').textContent='Added to anchor the curve at your unit';
+ }catch{
+  $('constant-note').textContent='Enter a complete equation defined at your unit';
+ }
+}
+function updateControls(){if(!room)return;const current=shooterFor(state.units,room.turn,room.shot),canFire=connected&&!busy&&!animations.length&&room.phase==='playing'&&current?.id===session.player;$('fire').disabled=!canFire;$('start').disabled=!!animations.length||room.phase==='playing'||!['red','blue'].every(t=>room.players.some(p=>p.team===t));$('equation').disabled=!!animations.length||room.phase!=='playing';$('equation-keys').disabled=$('equation').disabled;$('native-keyboard').disabled=$('equation').disabled;updateConstant();}
 $('teams').onclick=async e=>{const b=e.target.closest('[data-team]');if(!b||b.disabled||room?.phase==='playing')return;try{apply(await action('team',{team:b.dataset.team}));}catch(e){toast(e.message);}};
 $('start').onclick=async()=>{try{apply(await action('start'));}catch(e){toast(e.message);}};
 function getShot(){const shooter=shooterFor(state.units,room.turn,room.shot);if(!shooter)throw Error('No active shooter.');const shot=trace(parse($('equation').value),shooter,state.units,state.obstacles);if(shot.length===0||shot.points.length<2)throw Error('This equation cannot be traced at this scale. Reduce steep or large exponential terms. No turn was used.');return {...shot,team:shooter.team};}
-$('equation').oninput=()=>{$('shot-info').textContent=`${RANGE} units of curve per shot`;};
+$('equation').oninput=()=>{$('shot-info').textContent=`${RANGE} units of curve per shot`;updateConstant();};
 let nativeKeyboard=!(window.matchMedia?.('(pointer: coarse)').matches);
 function configureKeyboard(){
  $('equation').inputMode=nativeKeyboard?'text':'none';

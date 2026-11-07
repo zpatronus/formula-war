@@ -91,9 +91,13 @@ export function viewerTeam(room,player){const team=room.players.find(p=>p.id===p
 export function equationForView(source,team,view){
  return team===view?source:source.replace(/[a-z]+/gi,name=>name.toLowerCase()==='x'?'(-x)':name);
 }
+export function anchorEquation(ast,shooter){
+ const world=worldEquation(ast,shooter.team),origin=evaluate(world,shooter.x),constant=shooter.y-origin;
+ if(!Number.isFinite(origin)||!Number.isFinite(constant)||!interval(world,shooter.x,shooter.x).every(Number.isFinite))throw Error(`Equation is undefined at your starting x = ${viewX(shooter.x,shooter.team).toFixed(2)}. Shift it or choose a different equation.`);
+ return {ast:world,origin,constant};
+}
 export function trace(ast,shooter,units,obstacles,budget=RANGE){
- ast=worldEquation(ast,shooter.team);
- const origin=evaluate(ast,shooter.x);if(!Number.isFinite(origin)||!interval(ast,shooter.x,shooter.x).every(Number.isFinite))throw Error(`Equation is undefined at your starting x = ${viewX(shooter.x,shooter.team).toFixed(2)}. Shift it or choose a different equation.`);
+ const anchor=anchorEquation(ast,shooter);ast=anchor.ast;const origin=anchor.origin;
  const direction=shooter.team==='red'?1:-1,points=[{x:shooter.x,y:shooter.y}],hits=new Set(),impacts=[];let x=0,length=0,reason='precision limit',iterations=0,obstacle=null;
  while(iterations++<24000){
   let step=.04,accepted=false,next;

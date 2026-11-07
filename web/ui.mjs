@@ -42,3 +42,9 @@ export function trajectoryHistory(paths,playerId,activeShot=null){
  if(other&&other.shot!==activeShot)history.push({path:other,opacity:.18});
  return history.sort((a,b)=>a.path.shot-b.path.shot);
 }
+
+export function formatConstant(value){
+ if(!Number.isFinite(value))throw Error('Constant must be finite.');
+ const [mantissa,exponent]=Math.abs(value).toExponential(2).split('e');
+ return `${value<0?'-':'+'}${mantissa}e${Number(exponent)}`;
+}
