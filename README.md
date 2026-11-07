@@ -32,6 +32,10 @@ Choose **Practice solo** for a browser-only training arena with three target dum
 - Shots penetrate players and can eliminate multiple enemies in one turn. Teammates are unharmed. Each enemy is shown eliminated when the animated bullet reaches it. Eliminate the opposing team to win. Matches draw after 100 shots. The host can start a fresh match with a new arena. A team player's explicit departure ends the current match.
 - Closing a tab preserves membership for reconnects. Use Leave or click the Formula War logo to return home and remove yourself; if the host leaves, the oldest remaining member becomes host. Disconnected players retain their turns; a stalled room expires naturally.
 
+## Appearance
+
+The page and canvas follow your system light/dark setting by default, including live changes. Use the header’s System / Light / Dark selector to override it. Your preference is saved locally in the browser.
+
 ## Equation keyboard and mobile layout
 
 Both desktop and mobile provide an equation keypad with digits, decimal point, x, pi, e, all operators, parentheses, sin/cos/tan/exp/ln/sqrt/abs, and a square shortcut. Keys insert at the current cursor or replace selected text. Function keys add parentheses and place the cursor inside; selecting existing text wraps it in the function. Cursor arrows, backspace, and clear are included. The signed automatic vertical constant is shown below the equation in scientific notation (e.g. `+1.03e2`) and updates while typing; it uses only your own unit, never another player’s coordinates. Normal typing still works on desktop; phones default to the on-screen math keys, with a device-keyboard toggle for native text entry. Controls pause while a shot animates.

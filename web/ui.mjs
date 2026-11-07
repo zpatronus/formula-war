@@ -48,3 +48,7 @@ export function formatConstant(value){
  const [mantissa,exponent]=Math.abs(value).toExponential(2).split('e');
  return `${value<0?'-':'+'}${mantissa}e${Number(exponent)}`;
 }
+
+export function resolveTheme(preference,systemDark){
+ return preference==='dark'||(preference!=='light'&&systemDark)?'dark':'light';
+}

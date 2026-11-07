@@ -1,9 +1,26 @@
 import {parse,trace,reconstruct,shooterFor,RANGE,pathAtLength,viewX,viewerTeam,equationForView,anchorEquation} from './game.mjs';
-import {escapeHTML as esc,editEquation,trajectoryHistory,formatConstant} from './ui.mjs';
+import {escapeHTML as esc,editEquation,trajectoryHistory,formatConstant,resolveTheme} from './ui.mjs';
 const $=id=>document.getElementById(id);
 let session=null,room=null,stream=null,state=null,pendingRoom=null,connected=false,busy=false,toastTimer,stateKey,animationFrame=null,practice=false,practiceTeam='red';
 const SHOT_SPEED=48; // World units of arc length per second.
 let animations=[];
+const systemTheme=window.matchMedia?.('(prefers-color-scheme: dark)');
+let themePreference='system',arenaColors={};
+try{const saved=localStorage.getItem('fw-theme');if(['light','dark'].includes(saved))themePreference=saved;}catch{}
+function applyTheme(){
+ const root=document.documentElement,theme=resolveTheme(themePreference,systemTheme?.matches??false);
+ root.setAttribute('data-theme',theme);$('theme-select').value=themePreference;
+ const css=getComputedStyle(root),color=name=>css.getPropertyValue('--'+name).trim();
+ arenaColors={grid:color('arena-grid'),axis:color('arena-axis'),label:color('arena-label'),obstacle:color('obstacle'),edge:color('obstacle-edge'),red:color('red'),blue:color('blue'),ink:color('ink'),muted:color('muted')};
+ $('theme-color').setAttribute('content',color('paper'));draw();
+}
+$('theme-select').onchange=()=>{
+ themePreference=['light','dark'].includes($('theme-select').value)?$('theme-select').value:'system';
+ try{localStorage.setItem('fw-theme',themePreference);}catch{}
+ applyTheme();
+};
+systemTheme?.addEventListener?.('change',()=>{if(themePreference==='system')applyTheme();});
+applyTheme();
 function cancelAnimation(){if(animationFrame!==null)cancelAnimationFrame(animationFrame);animationFrame=null;animations=[];}
 function animate(now){
  animationFrame=null;const active=animations[0];
@@ -120,14 +137,14 @@ function draw(now=performance.now()){if(!state)return;
  const pendingObstacles=new Set(active?room.history.filter(e=>e.kind==='fire').slice(active.shot).map(e=>e.data?.obstacle).filter(Boolean):[]);
  const aliveObstacles=new Set(state.obstacles.map(o=>o.id));
  const visibleObstacles=state.allObstacles.filter(o=>aliveObstacles.has(o.id)||pendingObstacles.has(o.id));
-const canvas=$('arena'),width=canvas.clientWidth,height=width*.6,dpr=window.devicePixelRatio||1;canvas.width=width*dpr;canvas.height=height*dpr;const c=canvas.getContext('2d');c.scale(dpr,dpr);const scale=width/40,X=x=>(viewX(x,viewerTeam(room,session.player))+20)*scale,Y=y=>(12-y)*scale;c.clearRect(0,0,width,height);c.lineWidth=1;c.strokeStyle='#dce1d4';for(let x=-20;x<=20;x+=2){c.beginPath();c.moveTo(X(x),0);c.lineTo(X(x),height);c.stroke();}for(let y=-12;y<=12;y+=2){c.beginPath();c.moveTo(0,Y(y));c.lineTo(width,Y(y));c.stroke();}c.strokeStyle='#b3c0aa';c.beginPath();c.moveTo(0,Y(0));c.lineTo(width,Y(0));c.moveTo(X(0),0);c.lineTo(X(0),height);c.stroke();c.fillStyle='#899780';c.font='9px monospace';for(let x=-16;x<20;x+=4)c.fillText(String(viewX(x,viewerTeam(room,session.player))),X(x)+3,Y(0)+12);for(let y=-10;y<=10;y+=2)if(y!==0)c.fillText(String(y),X(0)+4,Y(y)-4);for(const o of visibleObstacles){c.beginPath();c.arc(X(o.x),Y(o.y),o.r*scale,0,2*Math.PI);c.fillStyle='#c7d0bc';c.fill();c.strokeStyle='#aebca2';c.stroke();}
+const canvas=$('arena'),width=canvas.clientWidth,height=width*.6,dpr=window.devicePixelRatio||1;canvas.width=width*dpr;canvas.height=height*dpr;const c=canvas.getContext('2d');c.scale(dpr,dpr);const scale=width/40,X=x=>(viewX(x,viewerTeam(room,session.player))+20)*scale,Y=y=>(12-y)*scale;c.clearRect(0,0,width,height);c.lineWidth=1;c.strokeStyle=arenaColors.grid;for(let x=-20;x<=20;x+=2){c.beginPath();c.moveTo(X(x),0);c.lineTo(X(x),height);c.stroke();}for(let y=-12;y<=12;y+=2){c.beginPath();c.moveTo(0,Y(y));c.lineTo(width,Y(y));c.stroke();}c.strokeStyle=arenaColors.axis;c.beginPath();c.moveTo(0,Y(0));c.lineTo(width,Y(0));c.moveTo(X(0),0);c.lineTo(X(0),height);c.stroke();c.fillStyle=arenaColors.label;c.font='9px monospace';for(let x=-16;x<20;x+=4)c.fillText(String(viewX(x,viewerTeam(room,session.player))),X(x)+3,Y(0)+12);for(let y=-10;y<=10;y+=2)if(y!==0)c.fillText(String(y),X(0)+4,Y(y)-4);for(const o of visibleObstacles){c.beginPath();c.arc(X(o.x),Y(o.y),o.r*scale,0,2*Math.PI);c.fillStyle=arenaColors.obstacle;c.fill();c.strokeStyle=arenaColors.edge;c.stroke();}
  const history=trajectoryHistory(state.paths,session.player,active?.shot??null);
  const paths=[...history,...(active?state.paths.filter(p=>p.shot===active.shot).map(path=>({path,opacity:1})):[])];
  for(const {path:p,opacity}of paths){
   const isActive=active?.shot===p.shot;
   const length=isActive?(active.started===null?0:(now-active.started)*SHOT_SPEED/1000):Infinity;
   const points=pathAtLength(p.points,p.distances,length);
-  c.globalAlpha=opacity;c.strokeStyle=p.team==='red'?'#d75938':'#347e99';c.lineWidth=2;c.beginPath();
+  c.globalAlpha=opacity;c.strokeStyle=p.team==='red'?arenaColors.red:arenaColors.blue;c.lineWidth=2;c.beginPath();
   for(const [j,pt]of points.entries())j?c.lineTo(X(pt.x),Y(pt.y)):c.moveTo(X(pt.x),Y(pt.y));c.stroke();c.globalAlpha=1;
   if(isActive&&points.length){const tip=points.at(-1);c.beginPath();c.arc(X(tip.x),Y(tip.y),3.5,0,Math.PI*2);c.fillStyle=c.strokeStyle;c.fill();}
  }
@@ -138,8 +155,8 @@ const canvas=$('arena'),width=canvas.clientWidth,height=width*.6,dpr=window.devi
   const path=state.paths.find(p=>p.shot===active.shot),travelled=active.started===null?0:(now-active.started)*SHOT_SPEED/1000;
   for(const id of fires[active.shot]?.data?.hits||[]){const impact=path?.impacts.find(hit=>hit.id===id);if(!impact||travelled<impact.length)pendingHits.add(id);}
  }
- const shooter=shooterFor(state.units,room.turn,room.shot);for(const u of state.units){const x=X(u.x),y=Y(u.y),alive=u.alive||pendingHits.has(u.id);c.globalAlpha=alive?1:.25;c.fillStyle=u.team==='red'?'#d75938':'#347e99';c.beginPath();c.arc(x,y,.55*scale,0,Math.PI*2);c.fill();if(!alive){c.strokeStyle='#1b2a2b';c.beginPath();c.moveTo(x-4,y-4);c.lineTo(x+4,y+4);c.moveTo(x+4,y-4);c.lineTo(x-4,y+4);c.stroke();}if(!active&&room.phase==='playing'&&shooter?.id===u.id){c.beginPath();c.arc(x,y,.85*scale,0,Math.PI*2);c.strokeStyle=c.fillStyle;c.stroke();}c.font='10px monospace';c.textAlign='center';c.fillText(u.name,x,y-1.05*scale);c.textAlign='left';c.globalAlpha=1;}
- if(room.phase==='lobby'){c.fillStyle='#596a52';c.font='16px Georgia';c.textAlign='center';c.fillText('Your next battle starts here.',width/2,height/2);c.textAlign='left';}}
+ const shooter=shooterFor(state.units,room.turn,room.shot);for(const u of state.units){const x=X(u.x),y=Y(u.y),alive=u.alive||pendingHits.has(u.id);c.globalAlpha=alive?1:.25;c.fillStyle=u.team==='red'?arenaColors.red:arenaColors.blue;c.beginPath();c.arc(x,y,.55*scale,0,Math.PI*2);c.fill();if(!alive){c.strokeStyle=arenaColors.ink;c.beginPath();c.moveTo(x-4,y-4);c.lineTo(x+4,y+4);c.moveTo(x+4,y-4);c.lineTo(x-4,y+4);c.stroke();}if(!active&&room.phase==='playing'&&shooter?.id===u.id){c.beginPath();c.arc(x,y,.85*scale,0,Math.PI*2);c.strokeStyle=c.fillStyle;c.stroke();}c.font='10px monospace';c.textAlign='center';c.fillText(u.name,x,y-1.05*scale);c.textAlign='left';c.globalAlpha=1;}
+ if(room.phase==='lobby'){c.fillStyle=arenaColors.muted;c.font='16px Georgia';c.textAlign='center';c.fillText('Your next battle starts here.',width/2,height/2);c.textAlign='left';}}
 new ResizeObserver(()=>draw()).observe($('arena'));
 async function init(){const id=location.hash.slice(1);if(id==='practice'){startPractice('red');return;}if(session&&(!id||id===session.room)){try{history.replaceState(null,'',`#${session.room}`);connect();return;}catch{exit();}}session=null;await rooms();if(/^[0-9a-f]{8}$/.test(id))joinPrompt(id);else if(id)history.replaceState(null,'',location.pathname);}
 window.addEventListener('hashchange',()=>{const id=location.hash.slice(1);if(id==='practice'){if(!practice)startPractice('red');return;}if(id&&id!==room?.id)joinPrompt(id);});setInterval(()=>{if(!room)rooms();},15000);init();

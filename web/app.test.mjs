@@ -6,18 +6,20 @@ import {formatConstant} from './ui.mjs';
 test('practice stays local and the home logo leaves practice and multiplayer',async()=>{
  const elements=new Map(),frames=new Map();let frameID=0,requests=0;
  const labels=[],historyStrokes=[];const ctx=new Proxy({}, {get:(target,key)=>{
-  if(key==='fillText')return (text,x,y)=>labels.push({text,x,y});
+  if(key==='fillText')return (text,x,y)=>labels.push({text,x,y,color:target.fillStyle});
   if(key==='clearRect')return ()=>{historyStrokes.length=0;};
   if(key==='stroke')return ()=>{if([.04,.09,.18].includes(target.globalAlpha))historyStrokes.push(target.globalAlpha);};
   return target[key]??(()=>{});
  }});
  const element=id=>{if(!elements.has(id))elements.set(id,{id,value:'',hidden:false,disabled:false,textContent:'',innerHTML:'',clientWidth:800,clientHeight:100,scrollHeight:100,scrollTop:0,classList:{values:new Set(),toggle(name,force){const enabled=force??!this.values.has(name);if(enabled)this.values.add(name);else this.values.delete(name);return enabled;},contains(name){return this.values.has(name);}},getContext:()=>ctx,attributes:{},setAttribute(key,value){this.attributes[key]=value;},setSelectionRange(start,end){this.selectionStart=start;this.selectionEnd=end;},focus(){},blur(){},showModal(){},close(){}});return elements.get(id);};
- globalThis.document={getElementById:element};
- globalThis.localStorage={getItem:()=>null,setItem(){}};
+ globalThis.document={getElementById:element,documentElement:element('root')};
+ globalThis.getComputedStyle=()=>({getPropertyValue:()=>element('root').attributes['data-theme']==='dark'?'#222222':'#eeeeee'});
+ const preferences=new Map();globalThis.localStorage={getItem:key=>preferences.get(key)||null,setItem:(key,value)=>preferences.set(key,value)};
  const saved=new Map();globalThis.sessionStorage={getItem:key=>saved.get(key)||null,setItem:(key,value)=>saved.set(key,value),removeItem:key=>saved.delete(key)};
  globalThis.location={hash:'',pathname:'/',origin:'http://localhost:8080'};
  globalThis.history={replaceState(){}};
- globalThis.window={devicePixelRatio:1,addEventListener(){}};
+ const systemTheme={matches:true,addEventListener(event,callback){this.onchange=callback;}};
+ globalThis.window={devicePixelRatio:1,addEventListener(){},matchMedia:query=>query.includes('prefers-color-scheme')?systemTheme:{matches:false}};
  globalThis.ResizeObserver=class{observe(){}};
  globalThis.requestAnimationFrame=callback=>{const id=++frameID;frames.set(id,callback);return id;};
  globalThis.cancelAnimationFrame=id=>frames.delete(id);
@@ -25,7 +27,19 @@ test('practice stays local and the home logo leaves practice and multiplayer',as
  globalThis.fetch=async()=>{requests++;return {ok:true,json:async()=>[]};};
  await import('./app.mjs');await new Promise(resolve=>setImmediate(resolve));
  const initialRequests=requests;
+ assert.equal(element('root').attributes['data-theme'],'dark');assert.equal(element('theme-select').value,'system');
+ systemTheme.matches=false;systemTheme.onchange();assert.equal(element('root').attributes['data-theme'],'light');
+ element('theme-select').value='dark';element('theme-select').onchange();assert.equal(element('root').attributes['data-theme'],'dark');
+ assert.equal(preferences.get('fw-theme'),'dark');systemTheme.onchange();assert.equal(element('root').attributes['data-theme'],'dark');
+ element('theme-select').value='system';element('theme-select').onchange();assert.equal(element('root').attributes['data-theme'],'light');
+
  element('training').onclick();
+ assert.equal(labels.findLast(p=>p.text==='You').color,'#eeeeee');
+ systemTheme.matches=true;systemTheme.onchange();
+ assert.equal(element('root').attributes['data-theme'],'dark');assert.equal(labels.findLast(p=>p.text==='You').color,'#222222','system theme must redraw an existing canvas');
+ element('theme-select').value='light';element('theme-select').onchange();
+ systemTheme.onchange();assert.equal(element('root').attributes['data-theme'],'light');assert.equal(labels.findLast(p=>p.text==='You').color,'#eeeeee');
+
  assert.equal(requests,initialRequests);assert.equal(element('invite').hidden,true);
  assert.ok(labels.some(p=>p.text==='10'&&p.x===404),'vertical axis must have coordinate labels');assert.ok(labels.findLast(p=>p.text==='You').x<400);assert.ok(labels.findLast(p=>p.text==='Target 1').x>400);
  assert.equal(element('phase-label').textContent,'Practice · shot 1');assert.equal(element('fire').disabled,false);
@@ -33,7 +47,7 @@ test('practice stays local and the home logo leaves practice and multiplayer',as
  await element('fire-form').onsubmit({preventDefault(){}});
  assert.equal(element('phase-label').textContent,'Practice · shot 1');assert.equal(element('fire').disabled,false);
  assert.match(element('toast').textContent,/No turn was used/);assert.equal(frames.size,0);
- 
+
  function keypress(key){element('equation-keys').onclick({target:{closest:()=>({dataset:{key}})}});}
  keypress('clear');keypress('3');keypress('sin');keypress('5');keypress('x');keypress('right');
  assert.equal(element('equation').value,'3sin(5x)');assert.equal(element('equation').selectionStart,element('equation').value.length);
@@ -75,7 +89,7 @@ test('practice stays local and the home logo leaves practice and multiplayer',as
  assert.equal(element('room-view').classList.contains('in-match'),false);
  await selectTeam('blue');assert.equal(teamRequest.team,'blue');assert.equal(teamRequest.token,'secret');
  assert.match(element('teams').innerHTML,/data-team="blue"[^>]*>Selected/);
- 
+
  liveRoom.phase='playing';liveRoom.turn='blue';liveRoom.seed='coordinates';
  liveRoom.players=[{id:'p1',name:'You',team:'red'},{id:'p2',name:'Opponent',team:'blue'}];liveRoom.roster=liveRoom.players;
  source.onmessage({data:JSON.stringify(liveRoom)});
@@ -86,17 +100,17 @@ test('practice stays local and the home logo leaves practice and multiplayer',as
  assert.equal(element('equation-constant').textContent,formatConstant(own.y+own.x**2),'constant must use your unit even when opponent is aiming');
  element('equation').value='sin(';element('equation').oninput();assert.equal(element('equation-constant').textContent,'');assert.equal(element('constant-bar').hidden,true);
  element('equation').value='0';element('equation').oninput();
- 
+
  assert.equal(element('room-view').classList.contains('in-match'),true);
  teamRequest=null;await selectTeam('red');assert.equal(teamRequest,null,'team changes must remain blocked during a game');
- 
+
  liveRoom.turn='red';source.onmessage({data:JSON.stringify(liveRoom)});
  assert.match(element('arena-note').textContent,/You is aiming · \(-[0-9]/);
  liveRoom.phase='finished';source.onmessage({data:JSON.stringify(liveRoom)});
  assert.equal(element('room-view').classList.contains('in-match'),false,'finished games must restore visible team controls');
  await selectTeam('blue');assert.equal(teamRequest.team,'blue');assert.match(element('teams').innerHTML,/data-team="blue"[^>]*>Selected/);
- 
- 
+
+
  element('home-link').onclick({preventDefault(){}});
  assert.equal(element('home').hidden,false);assert.equal(element('room-view').hidden,true);
  assert.equal(saved.has('fw-session'),false);assert.equal(source.closed,true);assert.equal(source.onmessage,null);

@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {editEquation,trajectoryHistory,formatConstant} from './ui.mjs';
+import {editEquation,trajectoryHistory,formatConstant,resolveTheme} from './ui.mjs';
 import {parse,evaluate} from './game.mjs';
 
 test('keypad can compose expressions with functions, implicit multiplication and cursor movement',()=>{
@@ -59,4 +59,20 @@ test('automatic constant uses signed scientific notation without changing its nu
  assert.equal(formatConstant(.005),'+5.00e-3');assert.equal(formatConstant(0),'+0.00e0');
  assert.equal(formatConstant(-0),'+0.00e0');assert.equal(formatConstant(1e100),'+1.00e100');
  assert.throws(()=>formatConstant(Infinity));assert.throws(()=>formatConstant(NaN));
+});
+
+test('appearance follows system unless explicitly overridden',()=>{
+ assert.equal(resolveTheme('system',true),'dark');assert.equal(resolveTheme('system',false),'light');
+ assert.equal(resolveTheme('light',true),'light');assert.equal(resolveTheme('dark',false),'dark');
+ assert.equal(resolveTheme(null,true),'dark');
+});
+test('dark theme has readable text and team colors on its page and canvas surfaces',async()=>{
+ const css=await readFile(new URL('./style.css',import.meta.url),'utf8');
+ const dark=css.match(/:root\[data-theme="dark"\]\{([^}]+)\}/)[1];
+ const colors=Object.fromEntries([...dark.matchAll(/--([\w-]+):(#[\da-f]{6});/g)].map(m=>[m[1],m[2]]));
+ function luminance(hex){return hex.slice(1).match(/../g).map(v=>parseInt(v,16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((n,v,i)=>n+v*[.2126,.7152,.0722][i],0);}
+ for(const [fg,bg]of [['ink','paper'],['ink','surface'],['ink','input'],['muted','surface'],['red','arena'],['blue','arena'],['arena-label','arena'],['primary-ink','primary-bg']]){
+  const a=luminance(colors[fg]),b=luminance(colors[bg]);assert.ok((Math.max(a,b)+.05)/(Math.min(a,b)+.05)>=4.5,`${fg} on ${bg}`);
+ }
+ assert.match(css,/@media\(prefers-color-scheme:dark\)/);
 });
